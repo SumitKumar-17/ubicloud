@@ -421,6 +421,7 @@ RSpec.describe Prog::Github::GithubRunnerNexus do
 
       it "waits if utilization is high, spill over enabled, and waited enough but spill vcpus limit exceeded" do
         expect(project).to receive(:quota_available?).with("GithubRunnerVCpu", 0).and_return(false)
+        expect(project).to receive(:quota_available?).with("GithubRunnerVCpuAlien", 0).and_return(true)
         project.set_ff_spill_to_alien_runners(true)
         runner.update(created_at: now - 40)
         expect(Config).to receive(:github_runner_aws_spill_vcpu_capacity).and_return(10)
@@ -430,8 +431,19 @@ RSpec.describe Prog::Github::GithubRunnerNexus do
         expect(runner.spill_over_set?).to be(false)
       end
 
+      it "waits if utilization is high, spill over enabled, and waited enough but customer's own alien quota is exceeded" do
+        expect(project).to receive(:quota_available?).with("GithubRunnerVCpu", 0).and_return(false)
+        expect(project).to receive(:quota_available?).with("GithubRunnerVCpuAlien", 0).and_return(false)
+        project.set_ff_spill_to_alien_runners(true)
+        runner.update(created_at: now - 40)
+
+        expect { nx.wait_concurrency_limit }.to nap
+        expect(runner.spill_over_set?).to be(false)
+      end
+
       it "allocates if utilization is high but spill over enabled and waited enough" do
         expect(project).to receive(:quota_available?).with("GithubRunnerVCpu", 0).and_return(false)
+        expect(project).to receive(:quota_available?).with("GithubRunnerVCpuAlien", 0).and_return(true)
         project.set_ff_spill_to_alien_runners(true)
         runner.update(created_at: now - 40)
 
